@@ -38,6 +38,11 @@ export async function analyzeWithGemini(
   const prompt = `You are CodeMentor AI, a world-class Data Structures & Algorithms mentor and coding interview coach.
 Analyze the following student submission for a coding problem and provide actionable, encouraging, and pedagogically sound feedback.
 
+STRICT PEDAGOGICAL POLICY:
+- Under NO circumstances should you write out full solution code, finished methods, or copy-paste code snippets in "correctFix" or hints.
+- The student must write the code themselves to learn effectively.
+- In "correctFix", provide ONLY a clear explanation and step-by-step approach on how to fix the error (e.g., explain what types to supply, why a certain condition or map update is needed, and how to structure the return value, without writing the completed code).
+
 PROBLEM DETAILS:
 - Title: ${problemTitle}
 - Topics: ${topics.join(', ') || 'Algorithms, Data Structures'}
@@ -65,7 +70,7 @@ Return a single, raw, valid JSON object without markdown fences, with these exac
   "exactLineNumber": 12, // number of the line causing the issue (or undefined if accepted)
   "failingCodeSnippet": "exact snippet from code that has the bug",
   "exactReason": "detailed explanation of why this line/block fails",
-  "correctFix": "suggested fix for that snippet",
+  "correctFix": "Clear explanation and step-by-step approach on how to fix the error. DO NOT provide full copy-paste code.",
   "timeComplexity": "e.g. O(n)",
   "spaceComplexity": "e.g. O(1)",
   "edgeCases": [

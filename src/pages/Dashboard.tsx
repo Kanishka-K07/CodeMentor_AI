@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Flame, Trophy, Target, TrendingUp, CheckCircle, Clock,
-  AlertCircle, BookOpen, Star,
+  AlertCircle, BookOpen, Star, ChevronRight,
 } from 'lucide-react';
 import { useAppContext } from '../store/AppContext';
 import { problems } from '../data/problems';

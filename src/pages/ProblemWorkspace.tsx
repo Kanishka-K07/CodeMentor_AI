@@ -939,7 +939,7 @@ export default function ProblemWorkspace() {
 
                             {aiResponse.correctFix && (
                               <p className="text-xs text-emerald-300 leading-relaxed bg-emerald-950/30 p-2 rounded border border-emerald-800/30">
-                                <strong>Suggested Fix:</strong> {aiResponse.correctFix}
+                                <strong>How to Approach the Fix:</strong> {aiResponse.correctFix}
                               </p>
                             )}
                           </div>
