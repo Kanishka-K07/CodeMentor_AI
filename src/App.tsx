@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import {
-  LayoutDashboard, BookOpen, Code2, Brain, User, Sun, Moon, Zap,
+  LayoutDashboard, BookOpen, Code2, Brain, User, Sun, Moon, Zap, Database,
 } from 'lucide-react';
 import { AppProvider, useAppContext } from './store/AppContext';
+import { storageService } from './services/storageService';
 import Dashboard from './pages/Dashboard';
 import ProblemList from './pages/ProblemList';
 import ProblemWorkspace from './pages/ProblemWorkspace';
@@ -17,6 +18,16 @@ import './index.css';
 // ============================================================
 function Navbar() {
   const { state, dispatch } = useAppContext();
+  const [dbStatus, setDbStatus] = useState<{ connected: boolean; dbName?: string } | null>(null);
+
+  useEffect(() => {
+    storageService.checkDbHealth().then(setDbStatus);
+    const interval = setInterval(() => {
+      storageService.checkDbHealth().then(setDbStatus);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   const toggleTheme = () =>
     dispatch({ type: 'SET_THEME', payload: state.theme === 'dark' ? 'light' : 'dark' });
 
@@ -96,6 +107,31 @@ function Navbar() {
           >
             <span>{state.userStats.points} pts</span>
             <span style={{ color: 'var(--color-text-muted)' }}>· {state.userStats.rank}</span>
+          </div>
+
+          {/* MongoDB Cluster Status */}
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium cursor-help"
+            title={
+              dbStatus?.connected
+                ? `MongoDB Cluster: Connected to ${dbStatus.dbName || 'codementor_ai'} (localhost:27017)`
+                : 'MongoDB: Offline / Local fallback active'
+            }
+            style={{
+              background: dbStatus?.connected ? 'rgba(35, 134, 54, 0.15)' : 'rgba(218, 54, 51, 0.15)',
+              color: dbStatus?.connected ? '#3fb950' : '#f85149',
+              border: `1px solid ${dbStatus?.connected ? 'rgba(46, 160, 67, 0.3)' : 'rgba(248, 81, 73, 0.3)'}`,
+            }}
+          >
+            <Database size={13} />
+            <span className="hidden md:inline font-mono text-[11px]">
+              {dbStatus?.connected ? 'MongoDB' : 'DB Offline'}
+            </span>
+            <span
+              className={`inline-block w-1.5 h-1.5 rounded-full ${
+                dbStatus?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'
+              }`}
+            />
           </div>
         </div>
       </div>

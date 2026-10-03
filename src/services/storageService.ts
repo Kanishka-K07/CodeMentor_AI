@@ -1,11 +1,28 @@
-import type { Language, AppState } from '../types';
+import type { Language, AppState, Submission, ProblemProgress, UserStats } from '../types';
 
 const STATE_KEY = 'ai-codementor-state-v1';
 const CODE_PREFIX = 'ai_codementor_code_';
 
 export const storageService = {
   /**
-   * Get saved code for a specific problem and language
+   * Check connection status of backend & MongoDB cluster
+   */
+  async checkDbHealth(): Promise<{ connected: boolean; dbName?: string }> {
+    try {
+      const res = await fetch('/api/health');
+      if (!res.ok) return { connected: false };
+      const data = await res.json();
+      return {
+        connected: data.database === 'connected',
+        dbName: data.databaseName,
+      };
+    } catch {
+      return { connected: false };
+    }
+  },
+
+  /**
+   * Get saved code for a specific problem and language (synchronous fast read from localStorage)
    */
   getCode(problemId: number, language: Language, defaultCode: string): string {
     try {
@@ -18,14 +35,35 @@ export const storageService = {
   },
 
   /**
-   * Save code for a specific problem and language
+   * Asynchronously fetch code draft from MongoDB if available
+   */
+  async fetchRemoteCode(problemId: number, language: Language): Promise<string | null> {
+    try {
+      const res = await fetch(`/api/code/${problemId}/${language}`);
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.code ?? null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Save code for a specific problem and language (persists to localStorage + MongoDB)
    */
   saveCode(problemId: number, language: Language, code: string): void {
     try {
       const key = `${CODE_PREFIX}${problemId}_${language}`;
       localStorage.setItem(key, code);
+
+      // Asynchronously sync draft to MongoDB
+      fetch(`/api/code/${problemId}/${language}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      }).catch((e) => console.debug('[MongoDB] Draft sync skipped:', e));
     } catch (e) {
-      console.warn('Failed to save code to localStorage:', e);
+      console.warn('Failed to save code to storage:', e);
     }
   },
 
@@ -36,13 +74,17 @@ export const storageService = {
     try {
       const key = `${CODE_PREFIX}${problemId}_${language}`;
       localStorage.removeItem(key);
+
+      fetch(`/api/code/${problemId}/${language}`, {
+        method: 'DELETE',
+      }).catch((e) => console.debug('[MongoDB] Draft delete skipped:', e));
     } catch (e) {
-      console.warn('Failed to reset code in localStorage:', e);
+      console.warn('Failed to reset code in storage:', e);
     }
   },
 
   /**
-   * Load full AppState from localStorage
+   * Load full AppState from localStorage (instant rendering)
    */
   loadAppState(): AppState | null {
     try {
@@ -55,13 +97,64 @@ export const storageService = {
   },
 
   /**
-   * Save full AppState to localStorage
+   * Save full AppState (persists to localStorage + bulk syncs to MongoDB)
    */
   saveAppState(state: AppState): void {
     try {
       localStorage.setItem(STATE_KEY, JSON.stringify(state));
+
+      // Asynchronously sync state to MongoDB
+      fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          submissions: state.submissions,
+          problemProgress: state.problemProgress,
+          userStats: state.userStats,
+        }),
+      }).catch((e) => console.debug('[MongoDB] Sync to cluster skipped:', e));
     } catch (e) {
       console.warn('Failed to save AppState:', e);
+    }
+  },
+
+  /**
+   * Fetch submissions directly from MongoDB
+   */
+  async fetchRemoteSubmissions(problemId?: number): Promise<Submission[]> {
+    try {
+      const url = problemId ? `/api/submissions?problemId=${problemId}` : '/api/submissions';
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Fetch problem progress directly from MongoDB
+   */
+  async fetchRemoteProgress(): Promise<Record<number, ProblemProgress> | null> {
+    try {
+      const res = await fetch('/api/progress');
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Fetch user stats directly from MongoDB
+   */
+  async fetchRemoteStats(): Promise<UserStats | null> {
+    try {
+      const res = await fetch('/api/stats');
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
     }
   },
 };
