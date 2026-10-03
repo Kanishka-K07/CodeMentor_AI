@@ -2,9 +2,10 @@ import type { AIHintResponse, JudgeResult } from '../types';
 import { analyzeStudentCode } from './aiAnalyzer';
 
 const CANDIDATE_MODELS = [
+  'gemini-3.1-flash-lite',
   'gemini-3.8-flash',
   'gemini-3.5-flash',
-  'gemini-3.1-flash-lite',
+  'gemini-flash-latest',
   'gemini-3-flash-preview',
 ];
 
@@ -146,4 +147,123 @@ Return a single, raw, valid JSON object without markdown fences, with these exac
 
   console.info('[CodeMentor AI] Gemini API calls exhausted or failed. Falling back to local rule-based analysis.');
   return analyzeStudentCode(problemTitle, code, result, topics);
+}
+
+/**
+ * Evaluates student code against test cases using Gemini AI as an intelligent judge.
+ * Used when external execution sandboxes are unreachable or offline.
+ */
+export async function judgeWithGemini(
+  problem: { title: string; description: string },
+  code: string,
+  language: string,
+  tests: Array<{ id: string | number; input: string; expected: string }>
+): Promise<JudgeResult | null> {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'your_gemini_api_key_here') return null;
+
+  const prompt = `You are an automated LeetCode-style code execution judge.
+Evaluate the following student code against each test case with complete precision.
+
+PROBLEM: ${problem.title}
+DESCRIPTION: ${problem.description}
+
+LANGUAGE: ${language}
+STUDENT CODE:
+${code}
+
+TEST CASES:
+${tests.map((t, idx) => `Test ${idx + 1}:
+  Input: ${t.input}
+  Expected Output: ${t.expected}`).join('\n')}
+
+INSTRUCTIONS:
+1. Check for syntax / compilation errors in the student's code. If invalid, set status to "Compilation Error".
+2. Mentally simulate and execute the code for each test case.
+3. Compare the actual output with the expected output (ignoring trivial whitespace formatting like "[0, 1]" vs "[0,1]").
+4. Set status to "Accepted" only if ALL test cases pass. Otherwise set to "Wrong Answer" or "Runtime Error".
+5. Return ONLY a single raw valid JSON object without markdown fences, with this structure:
+{
+  "status": "Accepted",
+  "passedCount": 3,
+  "totalCount": 3,
+  "failedInput": null,
+  "failedExpected": null,
+  "failedGot": null,
+  "compilationError": null,
+  "runtimeError": null,
+  "testCaseDetails": [
+    {
+      "id": 1,
+      "passed": true,
+      "input": "...",
+      "expected": "...",
+      "got": "..."
+    }
+  ]
+}`;
+
+  for (const model of CANDIDATE_MODELS) {
+    try {
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: 'application/json',
+          },
+        }),
+      });
+
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) continue;
+
+      const parsed = JSON.parse(cleanJsonText(rawText));
+      if (!parsed.status) continue;
+
+      const totalCount = tests.length;
+      const isAccepted = parsed.status === 'Accepted';
+      const passedCount = typeof parsed.passedCount === 'number'
+        ? parsed.passedCount
+        : (isAccepted ? totalCount : 0);
+
+      return {
+        status: parsed.status,
+        passedCount,
+        totalCount,
+        executionTime: 75,
+        memoryUsed: 40 * 1024,
+        failedInput: parsed.failedInput || undefined,
+        failedExpected: parsed.failedExpected || undefined,
+        failedGot: parsed.failedGot || undefined,
+        compilationError: parsed.compilationError || undefined,
+        runtimeError: parsed.runtimeError || undefined,
+        testCaseDetails: Array.isArray(parsed.testCaseDetails)
+          ? parsed.testCaseDetails.map((td: any, i: number) => ({
+              id: td.id ?? i + 1,
+              passed: Boolean(td.passed),
+              input: td.input || tests[i]?.input || '',
+              expected: td.expected || tests[i]?.expected || '',
+              got: td.got || (td.passed ? tests[i]?.expected : 'Incorrect output'),
+            }))
+          : tests.map((t, i) => ({
+              id: i + 1,
+              passed: isAccepted,
+              input: t.input,
+              expected: t.expected,
+              got: isAccepted ? t.expected : 'Wrong output',
+            })),
+      };
+    } catch {
+      // try next model
+    }
+  }
+
+  return null;
 }
