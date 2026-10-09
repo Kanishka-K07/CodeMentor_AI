@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Flame, Trophy, Target, TrendingUp, CheckCircle, Clock,
-  AlertCircle, BookOpen, Star, ChevronRight,
+  AlertCircle, BookOpen, Star, ChevronRight, ChevronLeft,
 } from 'lucide-react';
 import { useAppContext } from '../store/AppContext';
 import { problems } from '../data/problems';
@@ -63,50 +63,192 @@ function DifficultyProgress({ label, solved, total, color }: { label: string; so
 }
 
 // ============================================================
-// ACTIVITY CALENDAR (last 15 weeks)
+// MONTH-WISE ACTIVITY CALENDAR
 // ============================================================
-function ActivityCalendar({ calendar }: { calendar: Record<string, number> }) {
-  const weeks = useMemo(() => {
-    const today = new Date();
-    const cells: { date: string; level: number }[] = [];
-    for (let i = 104; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const key = d.toISOString().split('T')[0];
-      const count = calendar[key] || 0;
-      const level = count === 0 ? 0 : count === 1 ? 1 : count <= 3 ? 2 : count <= 6 ? 3 : 4;
-      cells.push({ date: key, level });
-    }
-    // Group into weeks
-    const grouped: typeof cells[] = [];
-    for (let w = 0; w < cells.length; w += 7) {
-      grouped.push(cells.slice(w, w + 7));
-    }
-    return grouped;
-  }, [calendar]);
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+function MonthCalendar({
+  year,
+  month,
+  calendar,
+}: {
+  year: number;
+  month: number; // 0-indexed
+  calendar: Record<string, number>;
+}) {
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const todayStr = (() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+  })();
+
+  const cells: Array<{ day: number | null; dateKey: string | null }> = [];
+  for (let b = 0; b < firstDow; b++) cells.push({ day: null, dateKey: null });
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    cells.push({ day: d, dateKey });
+  }
+
+  // Cell size: fixed 26px wide × 22px tall — compact but readable
+  const CELL: React.CSSProperties = {
+    width: '100%',
+    height: 22,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 4,
+    fontSize: 10,
+    transition: 'all 0.12s ease',
+  };
 
   return (
-    <div className="overflow-x-auto">
-      <div className="flex gap-1">
-        {weeks.map((week, wi) => (
-          <div key={wi} className="flex flex-col gap-1">
-            {week.map((cell) => (
-              <div
-                key={cell.date}
-                className="cal-cell"
-                data-level={cell.level}
-                title={`${cell.date}: ${cell.level === 0 ? 'No' : calendar[cell.date] ?? 0} submission${calendar[cell.date] === 1 ? '' : 's'}`}
-              />
-            ))}
+    <div>
+      {/* Day-of-week headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 2 }}>
+        {DAY_LABELS.map((l) => (
+          <div key={l} style={{ textAlign: 'center', fontSize: 9, color: 'var(--color-text-muted)', fontWeight: 600, padding: '1px 0' }}>
+            {l}
           </div>
         ))}
       </div>
-      <div className="flex items-center gap-2 mt-2 justify-end">
-        <span className="text-xs text-muted">Less</span>
+      {/* Day cells */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+        {cells.map((cell, idx) => {
+          if (!cell.day || !cell.dateKey) {
+            return <div key={`blank-${idx}`} style={{ height: 22 }} />;
+          }
+          const count = calendar[cell.dateKey] || 0;
+          const isActive = count > 0;
+          const isToday = cell.dateKey === todayStr;
+
+          let bg = 'transparent';
+          let borderColor = 'transparent';
+          let color = 'var(--color-text-muted)';
+
+          if (isActive) {
+            if (count >= 7)      { bg = 'rgba(63,185,80,0.90)'; borderColor = 'rgba(63,185,80,1)';    color = '#fff'; }
+            else if (count >= 4) { bg = 'rgba(63,185,80,0.60)'; borderColor = 'rgba(63,185,80,0.8)'; color = '#fff'; }
+            else if (count >= 2) { bg = 'rgba(63,185,80,0.35)'; borderColor = 'rgba(63,185,80,0.5)'; color = '#3fb950'; }
+            else                 { bg = 'rgba(63,185,80,0.16)'; borderColor = 'rgba(63,185,80,0.3)'; color = '#3fb950'; }
+          }
+
+          return (
+            <div
+              key={cell.dateKey}
+              title={`${cell.dateKey}: ${count} submission${count !== 1 ? 's' : ''}`}
+              style={{
+                ...CELL,
+                background: bg,
+                border: `1px solid ${isToday ? '#58a6ff' : borderColor}`,
+                color: isToday && !isActive ? '#58a6ff' : color,
+                fontWeight: isToday || isActive ? 700 : 400,
+                cursor: isActive ? 'pointer' : 'default',
+                boxShadow: isToday ? '0 0 0 1px rgba(88,166,255,0.35)' : undefined,
+              }}
+            >
+              {cell.day}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ActivityCalendar({ calendar }: { calendar: Record<string, number> }) {
+  const now = new Date();
+  const [viewYear, setViewYear] = useState(now.getFullYear());
+  const [viewMonth, setViewMonth] = useState(now.getMonth());
+
+  const totalThisMonth = useMemo(() => {
+    const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+    return Object.entries(calendar)
+      .filter(([k]) => k.startsWith(prefix))
+      .reduce((s, [, v]) => s + v, 0);
+  }, [calendar, viewYear, viewMonth]);
+
+  const activeDaysThisMonth = useMemo(() => {
+    const prefix = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+    return Object.entries(calendar).filter(([k, v]) => k.startsWith(prefix) && v > 0).length;
+  }, [calendar, viewYear, viewMonth]);
+
+  const isCurrentMonth = viewYear === now.getFullYear() && viewMonth === now.getMonth();
+
+  const goToPrev = () => {
+    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11); }
+    else setViewMonth((m) => m - 1);
+  };
+
+  const goToNext = () => {
+    if (isCurrentMonth) return;
+    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0); }
+    else setViewMonth((m) => m + 1);
+  };
+
+  return (
+    <div>
+      {/* Compact single-line header: ‹  Month Year  active·subs  › */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <button
+          onClick={goToPrev}
+          title="Previous month"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center' }}
+        >
+          <ChevronLeft size={13} />
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-primary)' }}>
+            {MONTH_NAMES[viewMonth].slice(0, 3)} {viewYear}
+          </span>
+          <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>
+            {activeDaysThisMonth}d
+          </span>
+          <span style={{ fontSize: 10, color: '#3fb950', fontWeight: 600 }}>
+            {totalThisMonth} sub{totalThisMonth !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        <button
+          onClick={goToNext}
+          disabled={isCurrentMonth}
+          title={isCurrentMonth ? '' : 'Next month'}
+          style={{
+            background: 'none', border: 'none', padding: '2px 4px', display: 'flex', alignItems: 'center',
+            color: isCurrentMonth ? 'var(--color-border)' : 'var(--color-text-muted)',
+            cursor: isCurrentMonth ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <ChevronRight size={13} />
+        </button>
+      </div>
+
+      {/* Month grid */}
+      <MonthCalendar year={viewYear} month={viewMonth} calendar={calendar} />
+
+      {/* Legend */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 6 }}>
+        <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Less</span>
         {[0, 1, 2, 3, 4].map((l) => (
-          <div key={l} className="cal-cell" data-level={l} />
+          <div
+            key={l}
+            style={{
+              width: 10, height: 10, borderRadius: 2,
+              background: l === 0 ? 'var(--color-bg-secondary)' :
+                l === 1 ? 'rgba(63,185,80,0.16)' :
+                l === 2 ? 'rgba(63,185,80,0.35)' :
+                l === 3 ? 'rgba(63,185,80,0.60)' : 'rgba(63,185,80,0.90)',
+              border: '1px solid rgba(63,185,80,0.2)',
+            }}
+          />
         ))}
-        <span className="text-xs text-muted">More</span>
+        <span style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>More</span>
       </div>
     </div>
   );

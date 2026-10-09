@@ -55,39 +55,88 @@ function getPointsForSolve(difficulty: string): number {
   return 20;
 }
 
+/**
+ * Calculates current and best streaks from the activity calendar.
+ *
+ * Algorithm:
+ *  - Sort all dates that have at least 1 submission.
+ *  - Walk the sorted dates forward, counting consecutive days.
+ *  - Track the longest consecutive run as bestStreak.
+ *  - After the walk, currentStreak is the last run length IF the last
+ *    active date is today or yesterday; otherwise 0.
+ */
 function calculateStreak(activityCalendar: Record<string, number>): { current: number; best: number } {
-  const today = new Date();
-  let current = 0;
-  let best = 0;
-  let temp = 0;
+  const dates = Object.keys(activityCalendar)
+    .filter((d) => activityCalendar[d] > 0)
+    .sort(); // lexicographic sort works for YYYY-MM-DD
 
-  // Build sorted date list
-  const dates = Object.keys(activityCalendar).sort();
+  if (dates.length === 0) return { current: 0, best: 0 };
 
-  for (let i = 0; i < dates.length; i++) {
-    if (i === 0) { temp = 1; }
-    else {
-      const prev = new Date(dates[i - 1]);
-      const curr = new Date(dates[i]);
-      const diff = Math.round((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
-      if (diff === 1) temp++;
-      else temp = 1;
+  let best = 1;
+  let runLength = 1;
+
+  for (let i = 1; i < dates.length; i++) {
+    // Parse each date as local midnight to avoid UTC-shift issues
+    const [py, pm, pd] = dates[i - 1].split('-').map(Number);
+    const [cy, cm, cd] = dates[i].split('-').map(Number);
+    const prevMs = new Date(py, pm - 1, pd).getTime();
+    const currMs = new Date(cy, cm - 1, cd).getTime();
+    const diffDays = Math.round((currMs - prevMs) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) {
+      runLength++;
+    } else {
+      runLength = 1;
     }
-    best = Math.max(best, temp);
+    if (runLength > best) best = runLength;
   }
 
-  // Calculate current streak (ending today or yesterday)
-  if (dates.length > 0) {
-    const lastDate = new Date(dates[dates.length - 1]);
-    const todayStr = today.toISOString().split('T')[0];
-    const diffFromToday = Math.round((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+  // Check whether the last active date is today or yesterday
+  const lastDateStr = dates[dates.length - 1];
+  const [ly, lm, ld] = lastDateStr.split('-').map(Number);
+  const lastMs = new Date(ly, lm - 1, ld).getTime();
+  const todayMs = (() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime();
+  })();
+  const daysAgo = Math.round((todayMs - lastMs) / (1000 * 60 * 60 * 24));
 
-    if (diffFromToday <= 1) {
-      current = temp;
-    }
-  }
+  const current = daysAgo <= 1 ? runLength : 0;
 
   return { current, best };
+}
+
+/**
+ * Returns today's date as a local YYYY-MM-DD string (avoids UTC-day drift).
+ */
+function todayLocalKey(): string {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * Deep-merge saved state with the current initial state so that new fields
+ * added to the schema in future releases still appear with their default
+ * values rather than being undefined.
+ */
+function mergeWithInitial(saved: Partial<AppState>): AppState {
+  return {
+    ...initialState,
+    ...saved,
+    userStats: {
+      ...initialStats,
+      ...(saved.userStats ?? {}),
+      // Ensure topicMastery contains ALL topics (new ones default to 0)
+      topicMastery: {
+        ...initialStats.topicMastery,
+        ...(saved.userStats?.topicMastery ?? {}),
+      },
+      activityCalendar: saved.userStats?.activityCalendar ?? {},
+      weakConcepts: saved.userStats?.weakConcepts ?? [],
+    },
+    problemProgress: saved.problemProgress ?? {},
+    submissions: saved.submissions ?? [],
+  };
 }
 
 // ============================================================
@@ -96,7 +145,7 @@ function calculateStreak(activityCalendar: Record<string, number>): { current: n
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'LOAD_STATE':
-      return action.payload;
+      return mergeWithInitial(action.payload);
 
     case 'SET_THEME':
       return { ...state, theme: action.payload };
@@ -112,6 +161,11 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
     case 'ADD_SUBMISSION': {
       const sub: Submission = action.payload;
+
+      // ── Duplicate prevention ──────────────────────────────────────────────
+      // If a submission with the same id already exists, skip it silently.
+      if (state.submissions.some((s) => s.id === sub.id)) return state;
+
       const prev = state.problemProgress[sub.problemId];
       const isNewSolve = sub.result.status === 'Accepted' && (!prev || prev.status !== 'solved');
       const wasAttempted = prev && prev.status === 'attempted';
@@ -129,20 +183,20 @@ function appReducer(state: AppState, action: AppAction): AppState {
         } as any,
       };
 
-      // Update submissions list
-      const updatedSubmissions = [sub, ...state.submissions].slice(0, 200);
+      // Update submissions list (deduplicated, newest first, capped at 200)
+      const updatedSubmissions = [sub, ...state.submissions]
+        .filter((s, idx, arr) => arr.findIndex((x) => x.id === s.id) === idx)
+        .slice(0, 200);
 
       // Update stats
       const stats = { ...state.userStats };
       stats.totalSubmissions += 1;
       if (sub.result.status === 'Accepted') stats.acceptedSubmissions += 1;
 
-      // Get difficulty from problem data (we'll pass it via submission metadata)
       if (isNewSolve) {
         stats.totalSolved += 1;
         if (!wasAttempted) stats.totalAttempted += 1;
 
-        // Points
         const difficulty = (sub as any).difficulty || 'Easy';
         stats.points += getPointsForSolve(difficulty);
         if (difficulty === 'Easy') stats.easySolved += 1;
@@ -160,15 +214,15 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ).length;
       }
 
-      // Activity calendar
-      const dateKey = new Date().toISOString().split('T')[0];
+      // Activity calendar — use local date to avoid UTC-day drift
+      const dateKey = todayLocalKey();
       stats.activityCalendar = {
         ...stats.activityCalendar,
         [dateKey]: (stats.activityCalendar[dateKey] || 0) + 1,
       };
       stats.lastActivityDate = dateKey;
 
-      // Streak
+      // Streak (recalculated from the full calendar)
       const { current, best } = calculateStreak(stats.activityCalendar);
       stats.currentStreak = current;
       stats.bestStreak = Math.max(stats.bestStreak, best);
@@ -211,23 +265,39 @@ const STORAGE_KEY = 'ai-codementor-state-v1';
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // Load from localStorage on mount
+  // Load from localStorage on mount and deep-merge with initial schema
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved) as AppState;
-        dispatch({ type: 'LOAD_STATE', payload: parsed });
+        const parsed = JSON.parse(saved) as Partial<AppState>;
+        dispatch({ type: 'LOAD_STATE', payload: parsed as AppState });
       }
     } catch {
-      // Ignore parse errors
+      // Ignore parse errors — start fresh with initialState
     }
   }, []);
 
-  // Save to localStorage on every state change
+  // Persist to localStorage on every state change + async MongoDB sync
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    // Apply theme class
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      console.warn('[AppContext] localStorage write failed:', e);
+    }
+
+    // Fire-and-forget MongoDB sync (non-fatal if backend is offline)
+    fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        submissions: state.submissions,
+        problemProgress: state.problemProgress,
+        userStats: state.userStats,
+      }),
+    }).catch((e) => console.debug('[MongoDB] Sync skipped:', e));
+
+    // Apply theme class to root
     if (state.theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
