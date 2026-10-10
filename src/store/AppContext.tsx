@@ -114,12 +114,73 @@ function todayLocalKey(): string {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
 }
 
+function normalizeDateKey(key: string): string {
+  if (!key) return '';
+  const parts = key.split(/[-/T ]/);
+  if (parts.length >= 3) {
+    const y = parts[0];
+    const m = parts[1].padStart(2, '0');
+    const d = parts[2].slice(0, 2).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return key;
+}
+
 /**
  * Deep-merge saved state with the current initial state so that new fields
  * added to the schema in future releases still appear with their default
  * values rather than being undefined.
  */
 function mergeWithInitial(saved: Partial<AppState>): AppState {
+  const activityCal: Record<string, number> = {};
+
+  // 1. Copy saved activityCalendar with normalized keys
+  if (saved.userStats?.activityCalendar) {
+    Object.entries(saved.userStats.activityCalendar).forEach(([k, v]) => {
+      const norm = normalizeDateKey(k);
+      if (norm && typeof v === 'number' && v > 0) {
+        activityCal[norm] = (activityCal[norm] || 0) + v;
+      }
+    });
+  }
+
+  // 2. Backfill from saved.submissions
+  if (Array.isArray(saved.submissions)) {
+    saved.submissions.forEach((sub) => {
+      if (sub && sub.timestamp) {
+        const d = new Date(sub.timestamp);
+        if (!isNaN(d.getTime())) {
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          activityCal[key] = (activityCal[key] || 0) + 1;
+        }
+      }
+    });
+  }
+
+  // 3. Backfill from problemProgress (solvedAt timestamps)
+  if (saved.problemProgress) {
+    Object.values(saved.problemProgress).forEach((prog: any) => {
+      if (prog && prog.solvedAt) {
+        const d = new Date(prog.solvedAt);
+        if (!isNaN(d.getTime())) {
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          if (!activityCal[key]) {
+            activityCal[key] = 1;
+          }
+        }
+      }
+    });
+  }
+
+  // 4. Fallback if userStats has submissions or streak but activityCal was somehow empty
+  const totalSubs = saved.userStats?.totalSubmissions || (Array.isArray(saved.submissions) ? saved.submissions.length : 0);
+  if (totalSubs > 0 && Object.keys(activityCal).length === 0) {
+    const fallbackKey = saved.userStats?.lastActivityDate ? normalizeDateKey(saved.userStats.lastActivityDate) : todayLocalKey();
+    activityCal[fallbackKey] = totalSubs;
+  }
+
+  const { current, best } = calculateStreak(activityCal);
+
   return {
     ...initialState,
     ...saved,
@@ -131,7 +192,9 @@ function mergeWithInitial(saved: Partial<AppState>): AppState {
         ...initialStats.topicMastery,
         ...(saved.userStats?.topicMastery ?? {}),
       },
-      activityCalendar: saved.userStats?.activityCalendar ?? {},
+      activityCalendar: activityCal,
+      currentStreak: current > 0 ? current : (saved.userStats?.currentStreak || (totalSubs > 0 ? 1 : 0)),
+      bestStreak: Math.max(saved.userStats?.bestStreak ?? 0, best, totalSubs > 0 ? 1 : 0),
       weakConcepts: saved.userStats?.weakConcepts ?? [],
     },
     problemProgress: saved.problemProgress ?? {},

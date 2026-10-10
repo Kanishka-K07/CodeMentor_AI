@@ -366,3 +366,22 @@
 .gradient-green { background: linear-gradient(135deg, rgba(63,185,80,0.15), rgba(63,185,80,0.05)); }
 .gradient-purple { background: linear-gradient(135deg, rgba(188,140,255,0.15), rgba(188,140,255,0.05)); }
 .gradient-orange { background: linear-gradient(135deg, rgba(253,140,115,0.15), rgba(253,140,115,0.05)); }
+
+/* Custom compact scrollbar for heatmap */
+.heatmap-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+.heatmap-scrollbar::-webkit-scrollbar {
+  height: 5px;
+}
+.heatmap-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.heatmap-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 9999px;
+}
+.heatmap-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
