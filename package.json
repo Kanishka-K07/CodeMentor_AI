@@ -14,11 +14,13 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/vite": "^4.3.3",
+    "bcryptjs": "^3.0.3",
     "concurrently": "^10.0.5",
     "cors": "^2.8.6",
     "dotenv": "^18.0.5",
     "express": "^5.2.1",
     "framer-motion": "^13.2.0",
+    "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.42.0",
     "mongoose": "^9.10.4",
     "react": "^19.2.8",
@@ -29,6 +31,8 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",

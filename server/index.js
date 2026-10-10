@@ -9,6 +9,7 @@ import { Submission } from './models/Submission.js';
 import { Progress } from './models/Progress.js';
 import { CodeDraft } from './models/CodeDraft.js';
 import { UserStats } from './models/UserStats.js';
+import authRouter from './routes/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +23,11 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/codeme
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// ============================================================
+// AUTH ROUTES  (/api/auth/*)
+// ============================================================
+app.use('/api/auth', authRouter);
 
 // ============================================================
 // 1. HEALTH CHECK

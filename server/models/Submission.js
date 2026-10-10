@@ -12,6 +12,7 @@ const testCaseDetailSchema = new mongoose.Schema({
 
 const submissionSchema = new mongoose.Schema({
   submissionId: { type: String, required: true, unique: true },
+  userId: { type: String, index: true, default: null },
   problemId: { type: Number, required: true, index: true },
   problemTitle: { type: String, required: true },
   language: { type: String, required: true },
