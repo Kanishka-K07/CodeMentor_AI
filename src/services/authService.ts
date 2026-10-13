@@ -35,9 +35,26 @@ function authHeaders(): Record<string, string> {
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {
-  const data = await res.json();
+  const text = await res.text();
+
+  // Empty body — likely the backend is down or the proxy got no response
+  if (!text || text.trim() === '') {
+    throw new Error(
+      res.ok
+        ? 'Server returned an empty response.'
+        : `Request failed (${res.status}): no response body. Make sure the backend server is running.`
+    );
+  }
+
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error('Cannot connect to server. Please make sure the backend is running (npm run server).');
+  }
+
   if (!res.ok) {
-    throw new Error(data.error || `Request failed (${res.status})`);
+    throw new Error((data.error as string) || `Request failed (${res.status})`);
   }
   return data as T;
 }
