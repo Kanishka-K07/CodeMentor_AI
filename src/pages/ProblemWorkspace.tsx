@@ -488,7 +488,7 @@ export default function ProblemWorkspace() {
   };
 
   const prevId = problem && problem.id > 1 ? problem.id - 1 : null;
-  const nextId = problem && problem.id < 50 ? problem.id + 1 : null;
+  const nextId = problem && problem.id < problems[problems.length - 1].id ? problem.id + 1 : null;
 
   const recommendedNextProblem = problem
     ? problems.find((p) => p.id !== problem.id && p.topics.some((t) => problem.topics.includes(t)))

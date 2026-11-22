@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Filter, CheckCircle, Circle, Clock, ChevronRight } from 'lucide-react';
+import { Search, Filter, CheckCircle, Circle, Clock, ChevronRight, ChevronLeft } from 'lucide-react';
 import { problems } from '../data/problems';
 import { useAppContext } from '../store/AppContext';
 import type { Difficulty, Topic } from '../types';
@@ -9,7 +9,7 @@ const TOPICS: Topic[] = [
   'Arrays', 'Strings', 'HashMap', 'Two Pointers', 'Sliding Window', 'Stack',
   'Queue', 'Linked List', 'Binary Search', 'Recursion', 'Sorting', 'Trees',
   'BST', 'Heap', 'Graphs', 'BFS', 'DFS', 'Greedy', 'Backtracking',
-  'Dynamic Programming', 'Math',
+  'Dynamic Programming', 'Math', 'Searching', 'Hashing', 'Bit Manipulation',
 ];
 
 function DifficultyBadge({ d }: { d: Difficulty }) {
@@ -28,6 +28,14 @@ export default function ProblemList() {
   const [diffFilter, setDiffFilter] = useState<Difficulty | 'All'>('All');
   const [topicFilter, setTopicFilter] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Solved' | 'Attempted' | 'Unsolved'>('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 50;
+
+  // Reset to page 1 when filter changes
+  const handleSearchChange = (val: string) => { setSearch(val); setCurrentPage(1); };
+  const handleDiffChange = (val: Difficulty | 'All') => { setDiffFilter(val); setCurrentPage(1); };
+  const handleTopicChange = (val: string) => { setTopicFilter(val); setCurrentPage(1); };
+  const handleStatusChange = (val: 'All' | 'Solved' | 'Attempted' | 'Unsolved') => { setStatusFilter(val); setCurrentPage(1); };
 
   const filtered = useMemo(() => {
     return problems.filter((p) => {
@@ -84,7 +92,7 @@ export default function ProblemList() {
             type="text"
             placeholder="Search problems or topics..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full pl-9 pr-4 py-2 rounded-lg text-sm"
             style={{
               background: 'var(--color-bg-primary)',
@@ -101,7 +109,7 @@ export default function ProblemList() {
             {(['All', 'Easy', 'Medium', 'Hard'] as const).map((d) => (
               <button
                 key={d}
-                onClick={() => setDiffFilter(d)}
+                onClick={() => handleDiffChange(d)}
                 className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
                 style={{
                   background: diffFilter === d
@@ -124,7 +132,7 @@ export default function ProblemList() {
             {(['All', 'Solved', 'Attempted', 'Unsolved'] as const).map((s) => (
               <button
                 key={s}
-                onClick={() => setStatusFilter(s)}
+                onClick={() => handleStatusChange(s)}
                 className="text-xs px-3 py-1.5 rounded-lg font-medium transition-all"
                 style={{
                   background: statusFilter === s ? 'var(--color-accent)' : 'var(--color-bg-primary)',
@@ -141,7 +149,7 @@ export default function ProblemList() {
         {/* Topic filter */}
         <div className="flex flex-wrap gap-1.5">
           <button
-            onClick={() => setTopicFilter('All')}
+            onClick={() => handleTopicChange('All')}
             className="text-xs px-2.5 py-1 rounded-md font-medium transition-all"
             style={{
               background: topicFilter === 'All' ? 'rgba(88,166,255,0.15)' : 'transparent',
@@ -154,7 +162,7 @@ export default function ProblemList() {
           {TOPICS.map((t) => (
             <button
               key={t}
-              onClick={() => setTopicFilter(t === topicFilter ? 'All' : t)}
+              onClick={() => handleTopicChange(t === topicFilter ? 'All' : t)}
               className="text-xs px-2.5 py-1 rounded-md font-medium transition-all"
               style={{
                 background: topicFilter === t ? 'rgba(88,166,255,0.15)' : 'transparent',
@@ -168,12 +176,35 @@ export default function ProblemList() {
         </div>
       </div>
 
-      {/* Results count */}
-      <div className="flex items-center gap-2">
-        <Filter size={13} className="text-muted" />
-        <span className="text-xs text-muted">
-          Showing {filtered.length} of {problems.length} problems
-        </span>
+      {/* Results count & Pagination Info */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Filter size={13} className="text-muted" />
+          <span className="text-xs text-muted">
+            Showing {Math.min(filtered.length, (currentPage - 1) * pageSize + 1)}-{Math.min(filtered.length, currentPage * pageSize)} of {filtered.length} problems (Total Library: {problems.length})
+          </span>
+        </div>
+        {Math.ceil(filtered.length / pageSize) > 1 && (
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="p-1.5 rounded-lg border border-[var(--color-border)] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--color-bg-secondary)]"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs text-secondary font-medium">
+              Page {currentPage} of {Math.ceil(filtered.length / pageSize)}
+            </span>
+            <button
+              disabled={currentPage >= Math.ceil(filtered.length / pageSize)}
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(filtered.length / pageSize), p + 1))}
+              className="p-1.5 rounded-lg border border-[var(--color-border)] disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--color-bg-secondary)]"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Problem table */}
@@ -198,7 +229,7 @@ export default function ProblemList() {
             No problems match your filters.
           </div>
         ) : (
-          filtered.map((p, idx) => {
+          filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((p, idx) => {
             const prog = state.problemProgress[p.id];
             const status = prog?.status ?? 'unsolved';
             return (
@@ -244,6 +275,31 @@ export default function ProblemList() {
           })
         )}
       </div>
+
+      {/* Bottom pagination */}
+      {Math.ceil(filtered.length / pageSize) > 1 && (
+        <div className="flex items-center justify-between px-2 pt-1 pb-4">
+          <span className="text-xs text-muted">
+            Page {currentPage} of {Math.ceil(filtered.length / pageSize)}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage <= 1}
+              onClick={() => { setCurrentPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-xs text-secondary disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--color-bg-secondary)] flex items-center gap-1"
+            >
+              <ChevronLeft size={14} /> Previous
+            </button>
+            <button
+              disabled={currentPage >= Math.ceil(filtered.length / pageSize)}
+              onClick={() => { setCurrentPage(p => Math.min(Math.ceil(filtered.length / pageSize), p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] text-xs text-secondary disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--color-bg-secondary)] flex items-center gap-1"
+            >
+              Next <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

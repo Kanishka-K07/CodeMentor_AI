@@ -34,15 +34,31 @@ function authHeaders(): Record<string, string> {
     : { 'Content-Type': 'application/json' };
 }
 
-async function handleResponse<T>(res: Response): Promise<T> {
-  const text = await res.text();
+async function safeFetch(url: string, options?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, options);
+  } catch {
+    throw new Error('Cannot connect to backend server. Please make sure the server is running (npm run dev).');
+  }
+}
 
-  // Empty body — likely the backend is down or the proxy got no response
+async function handleResponse<T>(res: Response): Promise<T> {
+  let text = '';
+  try {
+    text = await res.text();
+  } catch {
+    throw new Error('Failed to read server response.');
+  }
+
+  // Empty body or proxy error (502 / 504)
   if (!text || text.trim() === '') {
+    if (res.status === 502 || res.status === 504) {
+      throw new Error('Backend server is not running or unreachable (502/504). Please run `npm run dev` to start both frontend and backend.');
+    }
     throw new Error(
       res.ok
         ? 'Server returned an empty response.'
-        : `Request failed (${res.status}): no response body. Make sure the backend server is running.`
+        : `Request failed (${res.status}): Make sure the backend server is running.`
     );
   }
 
@@ -50,7 +66,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
   try {
     data = JSON.parse(text);
   } catch {
-    throw new Error('Cannot connect to server. Please make sure the backend is running (npm run server).');
+    throw new Error('Invalid response from server. Please make sure the backend is running (npm run dev).');
   }
 
   if (!res.ok) {
@@ -69,7 +85,7 @@ export const authService = {
     password: string,
     initialData?: { userStats?: unknown; problemProgress?: unknown }
   ): Promise<AuthResponse> {
-    const res = await fetch(`${BASE}/register`, {
+    const res = await safeFetch(`${BASE}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password, initialData }),
@@ -79,7 +95,7 @@ export const authService = {
 
   /** Login with email + password. */
   async login(email: string, password: string): Promise<AuthResponse> {
-    const res = await fetch(`${BASE}/login`, {
+    const res = await safeFetch(`${BASE}/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -92,7 +108,7 @@ export const authService = {
     const token = getToken();
     if (!token) return null;
     try {
-      const res = await fetch(`${BASE}/me`, { headers: authHeaders() });
+      const res = await safeFetch(`${BASE}/me`, { headers: authHeaders() });
       if (!res.ok) return null;
       const { user } = await res.json();
       return user as AuthUser;
@@ -106,7 +122,7 @@ export const authService = {
     const token = getToken();
     if (!token) return;
     try {
-      await fetch(`${BASE}/sync`, {
+      await safeFetch(`${BASE}/sync`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({ userStats, problemProgress }),
@@ -123,7 +139,7 @@ export const authService = {
     currentPassword?: string;
     newPassword?: string;
   }): Promise<AuthUser> {
-    const res = await fetch(`${BASE}/profile`, {
+    const res = await safeFetch(`${BASE}/profile`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify(payload),

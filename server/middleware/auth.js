@@ -42,9 +42,10 @@ export function optionalAuth(req, res, next) {
 }
 
 export function generateToken(user) {
+  const userId = user._id ? user._id.toString() : (user.id || String(user._id || ''));
   return jwt.sign(
     {
-      id: user._id.toString(),
+      id: userId,
       email: user.email,
       name: user.name,
       role: user.role || 'student',

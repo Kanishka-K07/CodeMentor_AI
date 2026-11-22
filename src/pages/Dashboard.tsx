@@ -5,8 +5,25 @@ import {
   AlertCircle, BookOpen, Star, ChevronRight,
 } from 'lucide-react';
 import { useAppContext } from '../store/AppContext';
+import { useAuth } from '../store/AuthContext';
 import { problems } from '../data/problems';
 import ContributionHeatmap from '../components/ContributionHeatmap';
+
+// Shared achievements definition (also used by Profile.tsx)
+const ACHIEVEMENTS = [
+  { id: 'first-solve', label: 'First Blood', icon: '🏆', condition: (s: any) => s.totalSolved >= 1 },
+  { id: 'five-solve', label: 'Rising Star', icon: '⭐', condition: (s: any) => s.totalSolved >= 5 },
+  { id: 'ten-solve', label: 'Problem Solver', icon: '💎', condition: (s: any) => s.totalSolved >= 10 },
+  { id: 'twenty-five-solve', label: 'Quarter Century', icon: '🥈', condition: (s: any) => s.totalSolved >= 25 },
+  { id: 'fifty-solve', label: 'Half Century', icon: '🥇', condition: (s: any) => s.totalSolved >= 50 },
+  { id: 'hundred-solve', label: 'Centurion', icon: '💯', condition: (s: any) => s.totalSolved >= 100 },
+  { id: 'streak-3', label: '3-Day Streak', icon: '🔥', condition: (s: any) => s.bestStreak >= 3 },
+  { id: 'streak-7', label: 'Weekly Warrior', icon: '⚡', condition: (s: any) => s.bestStreak >= 7 },
+  { id: 'first-medium', label: 'Rising Up', icon: '📈', condition: (s: any) => s.mediumSolved >= 1 },
+  { id: 'first-hard', label: 'Hard Mode', icon: '💪', condition: (s: any) => s.hardSolved >= 1 },
+  { id: 'points-100', label: 'Point Scorer', icon: '🏅', condition: (s: any) => s.points >= 100 },
+  { id: 'points-500', label: 'Point Hunter', icon: '💰', condition: (s: any) => s.points >= 500 },
+];
 
 // ============================================================
 // STAT CARD
@@ -185,11 +202,19 @@ function WeakConcepts({ weakConcepts, topicMastery }: { weakConcepts: string[]; 
 // ============================================================
 export default function Dashboard() {
   const { state } = useAppContext();
+  const { authState } = useAuth();
   const { userStats, problemProgress, submissions } = state;
+
+  const firstName = authState.user?.name?.split(' ')[0] || 'Student';
 
   const accuracy = userStats.totalSubmissions > 0
     ? Math.round((userStats.acceptedSubmissions / userStats.totalSubmissions) * 100)
     : 0;
+
+  const unlockedBadges = useMemo(
+    () => ACHIEVEMENTS.filter(a => a.condition(userStats)).slice(0, 3),
+    [userStats]
+  );
 
   const solvedByDifficulty = useMemo(() => ({
     easy: problems.filter((p) => p.difficulty === 'Easy' && problemProgress[p.id]?.status === 'solved').length,
@@ -209,7 +234,7 @@ export default function Dashboard() {
       >
         <div className="relative z-10">
           <h1 className="text-2xl font-bold text-primary mb-1">
-            Welcome back, <span className="text-gradient">Student</span> 👋
+            Welcome back, <span className="text-gradient">{firstName}</span> 👋
           </h1>
           <p className="text-secondary text-sm">
             Don't just fix your code.{' '}
@@ -261,6 +286,22 @@ export default function Dashboard() {
           iconColor="#bc8cff"
         />
       </div>
+
+      {/* Recent Badges row */}
+      {unlockedBadges.length > 0 && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="text-xs font-semibold text-muted">Recent Badges:</span>
+          {unlockedBadges.map(badge => (
+            <span
+              key={badge.id}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+              style={{ background: 'rgba(188,140,255,0.1)', color: '#bc8cff', border: '1px solid rgba(188,140,255,0.2)' }}
+            >
+              {badge.icon} {badge.label}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -334,6 +375,37 @@ export default function Dashboard() {
             weakConcepts={userStats.weakConcepts}
             topicMastery={userStats.topicMastery}
           />
+        </div>
+
+        {/* Topic Progress */}
+        <div className="glass-card p-5">
+          <h2 className="text-base font-semibold text-primary mb-4 flex items-center gap-2">
+            <TrendingUp size={16} style={{ color: '#bc8cff' }} />
+            Topic Progress
+          </h2>
+          <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+            {Object.entries(userStats.topicMastery)
+              .filter(([, v]) => v > 0)
+              .sort(([, a], [, b]) => b - a)
+              .map(([topic, score]) => (
+                <div key={topic} className="flex items-center gap-2">
+                  <span className="text-xs text-secondary w-28 truncate shrink-0">{topic}</span>
+                  <div className="flex-1 progress-bar">
+                    <div
+                      className="progress-fill"
+                      style={{
+                        width: `${score}%`,
+                        background: score >= 70 ? '#3fb950' : score >= 40 ? '#d29922' : '#58a6ff',
+                      }}
+                    />
+                  </div>
+                  <span className="text-xs font-semibold text-muted w-8 text-right">{score}%</span>
+                </div>
+              ))}
+            {Object.values(userStats.topicMastery).every(v => v === 0) && (
+              <p className="text-xs text-muted text-center py-4">Solve problems to build topic mastery!</p>
+            )}
+          </div>
         </div>
       </div>
     </div>

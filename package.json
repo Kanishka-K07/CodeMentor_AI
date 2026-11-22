@@ -4,9 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k -n \"server,client\" -c \"yellow,cyan\" \"npm run server\" \"vite\"",
+    "dev:client": "vite",
     "server": "node server/index.js",
-    "dev:all": "concurrently -k \"npm run server\" \"npm run dev\"",
+    "dev:all": "concurrently -k -n \"server,client\" -c \"yellow,cyan\" \"npm run server\" \"vite\"",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"

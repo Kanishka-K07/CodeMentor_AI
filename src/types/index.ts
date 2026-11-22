@@ -27,7 +27,10 @@ export type Topic =
   | 'Backtracking'
   | 'Dynamic Programming'
   | 'Divide and Conquer'
-  | 'Math';
+  | 'Math'
+  | 'Searching'
+  | 'Hashing'
+  | 'Bit Manipulation';
 
 export type JudgeStatus =
   | 'Accepted'

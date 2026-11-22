@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, NavLink, useNavigate } from 're
 import { Toaster } from 'react-hot-toast';
 import {
   LayoutDashboard, BookOpen, Code2, Brain, User, Sun, Moon, Zap, Database,
-  LogOut, LogIn, UserPlus, ChevronDown,
+  LogOut, LogIn, UserPlus, ChevronDown, Trophy,
 } from 'lucide-react';
 import { AppProvider, useAppContext } from './store/AppContext';
 import { AuthProvider, useAuth } from './store/AuthContext';
@@ -13,6 +13,7 @@ import ProblemList from './pages/ProblemList';
 import ProblemWorkspace from './pages/ProblemWorkspace';
 import AICodeMentor from './pages/AICodeMentor';
 import Profile from './pages/Profile';
+import Leaderboard from './pages/Leaderboard';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import './index.css';
@@ -158,6 +159,7 @@ function Navbar() {
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/problems', icon: BookOpen, label: 'Problems' },
+    { to: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { to: '/ai-mentor', icon: Brain, label: 'AI Mentor' },
     { to: '/profile', icon: User, label: 'Profile' },
   ];
@@ -311,6 +313,7 @@ function AppShell() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/problems" element={<ProblemList />} />
             <Route path="/problems/:id" element={<ProblemWorkspace />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
             <Route path="/ai-mentor" element={<AICodeMentor />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/login" element={<Login />} />

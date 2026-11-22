@@ -1,7 +1,9 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import mongoose from 'mongoose';
 import { User } from '../models/User.js';
 import { requireAuth, generateToken } from '../middleware/auth.js';
+import { fallbackStorage } from '../fallbackStorage.js';
 
 const router = express.Router();
 
@@ -12,7 +14,7 @@ function sanitizeUser(user) {
   const obj = user.toObject ? user.toObject() : { ...user };
   delete obj.passwordHash;
   return {
-    id: obj._id ? obj._id.toString() : obj.id,
+    id: obj._id ? obj._id.toString() : (obj.id || String(obj._id || '')),
     name: obj.name,
     email: obj.email,
     avatar: obj.avatar || '',
@@ -23,8 +25,12 @@ function sanitizeUser(user) {
   };
 }
 
+function isDbConnected() {
+  return mongoose.connection.readyState === 1;
+}
+
 // ============================================================
-// 1. REGISTER
+// 1. REGISTER (/api/auth/register)
 // ============================================================
 router.post('/register', async (req, res) => {
   try {
@@ -39,32 +45,54 @@ router.post('/register', async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const existing = await User.findOne({ email: normalizedEmail });
-    if (existing) {
-      return res.status(400).json({ error: 'An account with this email already exists' });
+
+    // Check if account already exists
+    if (isDbConnected()) {
+      const existing = await User.findOne({ email: normalizedEmail });
+      if (existing) {
+        return res.status(400).json({ error: 'An account with this email already exists' });
+      }
+    } else {
+      const existing = fallbackStorage.findUserByEmail(normalizedEmail);
+      if (existing) {
+        return res.status(400).json({ error: 'An account with this email already exists' });
+      }
     }
 
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Initial user stats and progress (can merge guest localStorage data if provided)
     const userStats = initialData?.userStats || {};
     const problemProgress = initialData?.problemProgress || {};
+    const avatar = `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name.trim())}`;
 
-    const user = new User({
-      name: name.trim(),
-      email: normalizedEmail,
-      passwordHash,
-      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name.trim())}`,
-      userStats,
-      problemProgress,
-    });
+    let savedUser;
+    if (isDbConnected()) {
+      const user = new User({
+        name: name.trim(),
+        email: normalizedEmail,
+        passwordHash,
+        avatar,
+        userStats,
+        problemProgress,
+      });
+      await user.save();
+      savedUser = user;
+    } else {
+      savedUser = fallbackStorage.createUser({
+        name: name.trim(),
+        email: normalizedEmail,
+        passwordHash,
+        avatar,
+        userStats,
+        problemProgress,
+      });
+    }
 
-    await user.save();
-    const token = generateToken(user);
+    const token = generateToken(savedUser);
 
     res.status(201).json({
-      user: sanitizeUser(user),
+      user: sanitizeUser(savedUser),
       token,
       message: 'Account created successfully',
     });
@@ -75,7 +103,7 @@ router.post('/register', async (req, res) => {
 });
 
 // ============================================================
-// 2. LOGIN
+// 2. LOGIN (/api/auth/login)
 // ============================================================
 router.post('/login', async (req, res) => {
   try {
@@ -86,14 +114,25 @@ router.post('/login', async (req, res) => {
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const user = await User.findOne({ email: normalizedEmail });
+    let user = null;
+
+    if (isDbConnected()) {
+      user = await User.findOne({ email: normalizedEmail });
+    }
+    // Also check fallback storage if not found or if DB offline
     if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      user = fallbackStorage.findUserByEmail(normalizedEmail);
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        error: 'Account not found. Please click "Create one free" below to register.',
+      });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return res.status(401).json({ error: 'Incorrect password. Please try again.' });
     }
 
     const token = generateToken(user);
@@ -114,9 +153,16 @@ router.post('/login', async (req, res) => {
 // ============================================================
 router.get('/me', requireAuth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    let user = null;
+    if (isDbConnected()) {
+      user = await User.findById(req.user.id);
+    }
     if (!user) {
-      return res.status(404).json({ error: 'User not found' });
+      user = fallbackStorage.findUserById(req.user.id);
+    }
+
+    if (!user) {
+      return res.status(404).json({ error: 'User session not found' });
     }
 
     res.json({ user: sanitizeUser(user) });
@@ -127,19 +173,26 @@ router.get('/me', requireAuth, async (req, res) => {
 });
 
 // ============================================================
-// 4. UPDATE PROFILE
+// 4. UPDATE PROFILE (/api/auth/profile)
 // ============================================================
 router.put('/profile', requireAuth, async (req, res) => {
   try {
     const { name, avatar, currentPassword, newPassword } = req.body;
-    const user = await User.findById(req.user.id);
+    let user = null;
+    const isMongo = isDbConnected();
+
+    if (isMongo) {
+      user = await User.findById(req.user.id);
+    }
+    if (!user) {
+      user = fallbackStorage.findUserById(req.user.id);
+    }
+
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (name) user.name = name.trim();
-    if (avatar) user.avatar = avatar;
-
+    let updatedPasswordHash = null;
     if (newPassword) {
       if (!currentPassword) {
         return res.status(400).json({ error: 'Current password is required to set a new password' });
@@ -152,11 +205,23 @@ router.put('/profile', requireAuth, async (req, res) => {
         return res.status(400).json({ error: 'New password must be at least 6 characters' });
       }
       const salt = await bcrypt.genSalt(10);
-      user.passwordHash = await bcrypt.hash(newPassword, salt);
+      updatedPasswordHash = await bcrypt.hash(newPassword, salt);
     }
 
-    await user.save();
-    res.json({ user: sanitizeUser(user), message: 'Profile updated successfully' });
+    if (isMongo && user.save) {
+      if (name) user.name = name.trim();
+      if (avatar) user.avatar = avatar;
+      if (updatedPasswordHash) user.passwordHash = updatedPasswordHash;
+      await user.save();
+      return res.json({ user: sanitizeUser(user), message: 'Profile updated successfully' });
+    } else {
+      const updates = {};
+      if (name) updates.name = name.trim();
+      if (avatar) updates.avatar = avatar;
+      if (updatedPasswordHash) updates.passwordHash = updatedPasswordHash;
+      const updated = fallbackStorage.updateUser(req.user.id, updates);
+      return res.json({ user: sanitizeUser(updated || user), message: 'Profile updated successfully' });
+    }
   } catch (err) {
     console.error('[Auth Profile Error]:', err);
     res.status(500).json({ error: 'Failed to update profile' });
@@ -164,32 +229,43 @@ router.put('/profile', requireAuth, async (req, res) => {
 });
 
 // ============================================================
-// 5. SYNC USER DATA (CLOUD PROGRESS SYNC)
+// 5. SYNC USER DATA (/api/auth/sync)
 // ============================================================
 router.post('/sync', requireAuth, async (req, res) => {
   try {
     const { userStats, problemProgress } = req.body;
-    const user = await User.findById(req.user.id);
+    let user = null;
+    const isMongo = isDbConnected();
+
+    if (isMongo) {
+      user = await User.findById(req.user.id);
+    }
+    if (!user) {
+      user = fallbackStorage.findUserById(req.user.id);
+    }
+
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (userStats) {
-      user.userStats = {
-        ...user.userStats,
-        ...userStats,
-      };
+    if (isMongo && user.save) {
+      if (userStats) {
+        user.userStats = { ...user.userStats, ...userStats };
+      }
+      if (problemProgress) {
+        user.problemProgress = { ...user.problemProgress, ...problemProgress };
+      }
+      await user.save();
+      return res.json({ success: true, user: sanitizeUser(user) });
+    } else {
+      const currentStats = user.userStats || {};
+      const currentProgress = user.problemProgress || {};
+      const updated = fallbackStorage.updateUser(req.user.id, {
+        userStats: userStats ? { ...currentStats, ...userStats } : currentStats,
+        problemProgress: problemProgress ? { ...currentProgress, ...problemProgress } : currentProgress,
+      });
+      return res.json({ success: true, user: sanitizeUser(updated || user) });
     }
-
-    if (problemProgress) {
-      user.problemProgress = {
-        ...user.problemProgress,
-        ...problemProgress,
-      };
-    }
-
-    await user.save();
-    res.json({ success: true, user: sanitizeUser(user) });
   } catch (err) {
     console.error('[Auth Sync Error]:', err);
     res.status(500).json({ error: 'Failed to sync user data' });

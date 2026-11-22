@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import type { AppState, AppAction, Submission, UserStats } from '../types';
+import { authService } from '../services/authService';
 
 // ============================================================
 // INITIAL STATE
@@ -22,6 +23,7 @@ const initialStats: UserStats = {
     Stack: 0, Queue: 0, 'Linked List': 0, 'Binary Search': 0, Recursion: 0,
     Sorting: 0, Trees: 0, BST: 0, Heap: 0, Graphs: 0, BFS: 0, DFS: 0,
     Greedy: 0, Backtracking: 0, 'Dynamic Programming': 0, Math: 0,
+    Searching: 0, Hashing: 0, 'Bit Manipulation': 0,
   },
   weakConcepts: [],
   activityCalendar: {},
@@ -42,17 +44,17 @@ const initialState: AppState = {
 // ============================================================
 function getRank(points: number): string {
   if (points >= 5000) return 'Grand Master';
-  if (points >= 3000) return 'Master';
-  if (points >= 1500) return 'Expert';
-  if (points >= 700) return 'Intermediate';
-  if (points >= 200) return 'Apprentice';
+  if (points >= 2500) return 'Master';
+  if (points >= 1000) return 'Expert';
+  if (points >= 400) return 'Intermediate';
+  if (points >= 100) return 'Apprentice';
   return 'Beginner';
 }
 
 function getPointsForSolve(difficulty: string): number {
-  if (difficulty === 'Hard') return 100;
-  if (difficulty === 'Medium') return 50;
-  return 20;
+  if (difficulty === 'Hard') return 30;
+  if (difficulty === 'Medium') return 20;
+  return 10;
 }
 
 /**
@@ -359,6 +361,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         userStats: state.userStats,
       }),
     }).catch((e) => console.debug('[MongoDB] Sync skipped:', e));
+
+    // Also sync directly to authenticated user profile in MongoDB
+    authService.sync(state.userStats, state.problemProgress);
 
     // Apply theme class to root
     if (state.theme === 'dark') {

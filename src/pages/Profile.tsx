@@ -8,21 +8,29 @@ import {
   RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, Tooltip,
 } from 'recharts';
 import { useAppContext } from '../store/AppContext';
+import { useAuth } from '../store/AuthContext';
 import { problems } from '../data/problems';
 
 // ============================================================
 // ACHIEVEMENT BADGES
 // ============================================================
 const ACHIEVEMENTS = [
-  { id: 'first-solve', label: 'First Solve', desc: 'Solved your first problem', icon: '🏆', condition: (s: any) => s.totalSolved >= 1 },
-  { id: 'five-solve', label: '5 Problems', desc: 'Solved 5 problems', icon: '⭐', condition: (s: any) => s.totalSolved >= 5 },
+  { id: 'first-solve', label: 'First Blood', desc: 'Solved your first problem', icon: '🏆', condition: (s: any) => s.totalSolved >= 1 },
+  { id: 'five-solve', label: 'Rising Star', desc: 'Solved 5 problems', icon: '⭐', condition: (s: any) => s.totalSolved >= 5 },
   { id: 'ten-solve', label: 'Problem Solver', desc: 'Solved 10 problems', icon: '💎', condition: (s: any) => s.totalSolved >= 10 },
+  { id: 'twenty-five-solve', label: 'Quarter Century', desc: 'Solved 25 problems', icon: '🥈', condition: (s: any) => s.totalSolved >= 25 },
+  { id: 'fifty-solve', label: 'Half Century', desc: 'Solved 50 problems', icon: '🥇', condition: (s: any) => s.totalSolved >= 50 },
+  { id: 'hundred-solve', label: 'Centurion', desc: 'Solved 100 problems', icon: '💯', condition: (s: any) => s.totalSolved >= 100 },
+  { id: 'two-hundred-solve', label: 'Double Century', desc: 'Solved 200 problems', icon: '🚀', condition: (s: any) => s.totalSolved >= 200 },
+  { id: 'three-hundred-solve', label: 'Master Coder', desc: 'Solved 300 problems', icon: '👑', condition: (s: any) => s.totalSolved >= 300 },
   { id: 'streak-3', label: '3-Day Streak', desc: 'Coded 3 days in a row', icon: '🔥', condition: (s: any) => s.bestStreak >= 3 },
   { id: 'streak-7', label: 'Weekly Warrior', desc: '7-day streak', icon: '⚡', condition: (s: any) => s.bestStreak >= 7 },
+  { id: 'streak-30', label: 'Monthly Hero', desc: '30-day streak', icon: '🌟', condition: (s: any) => s.bestStreak >= 30 },
   { id: 'first-medium', label: 'Rising Up', desc: 'Solved a Medium problem', icon: '📈', condition: (s: any) => s.mediumSolved >= 1 },
   { id: 'first-hard', label: 'Hard Mode', desc: 'Solved a Hard problem', icon: '💪', condition: (s: any) => s.hardSolved >= 1 },
-  { id: 'accuracy', label: 'Sharpshooter', desc: '80%+ accuracy', icon: '🎯', condition: (s: any) => s.totalSubmissions >= 5 && (s.acceptedSubmissions / s.totalSubmissions) >= 0.8 },
-  { id: 'centurion', label: 'Centurion', desc: '100+ points earned', icon: '🏅', condition: (s: any) => s.points >= 100 },
+  { id: 'accuracy', label: 'Sharpshooter', desc: '80%+ accuracy (5+ subs)', icon: '🎯', condition: (s: any) => s.totalSubmissions >= 5 && (s.acceptedSubmissions / s.totalSubmissions) >= 0.8 },
+  { id: 'points-100', label: 'Point Scorer', desc: 'Earned 100+ points', icon: '🏅', condition: (s: any) => s.points >= 100 },
+  { id: 'points-500', label: 'Point Hunter', desc: 'Earned 500+ points', icon: '💰', condition: (s: any) => s.points >= 500 },
 ];
 
 function AchievementBadge({ achievement, unlocked }: { achievement: typeof ACHIEVEMENTS[0]; unlocked: boolean }) {
@@ -88,7 +96,15 @@ function TopicRadar({ topicMastery }: { topicMastery: Record<string, number> }) 
 // ============================================================
 export default function Profile() {
   const { state } = useAppContext();
+  const { authState } = useAuth();
   const { userStats, submissions, problemProgress } = state;
+
+  const userName = authState.user?.name || 'Student';
+  const userInitial = userName[0]?.toUpperCase() || 'S';
+
+  const easyTotal = problems.filter(p => p.difficulty === 'Easy').length;
+  const mediumTotal = problems.filter(p => p.difficulty === 'Medium').length;
+  const hardTotal = problems.filter(p => p.difficulty === 'Hard').length;
 
   const accuracy = userStats.totalSubmissions > 0
     ? Math.round((userStats.acceptedSubmissions / userStats.totalSubmissions) * 100)
@@ -122,10 +138,12 @@ export default function Profile() {
             className="w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-bold shrink-0"
             style={{ background: 'linear-gradient(135deg, #58a6ff, #bc8cff)', color: '#0d1117' }}
           >
-            S
+            {authState.user?.avatar ? (
+              <img src={authState.user.avatar} alt={userName} className="w-20 h-20 rounded-2xl object-cover" />
+            ) : userInitial}
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-primary">Student</h1>
+            <h1 className="text-2xl font-bold text-primary">{userName}</h1>
             <p className="text-muted text-sm mt-0.5">AI CodeMentor Learner</p>
             <div className="flex flex-wrap gap-3 mt-3">
               <div
@@ -177,10 +195,10 @@ export default function Profile() {
           {/* Stats cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { label: 'Easy', value: userStats.easySolved, total: 20, color: '#3fb950' },
-              { label: 'Medium', value: userStats.mediumSolved, total: 20, color: '#d29922' },
-              { label: 'Hard', value: userStats.hardSolved, total: 10, color: '#f85149' },
-              { label: 'Total', value: userStats.totalSolved, total: 50, color: '#58a6ff' },
+              { label: 'Easy', value: userStats.easySolved, total: easyTotal, color: '#3fb950' },
+              { label: 'Medium', value: userStats.mediumSolved, total: mediumTotal, color: '#d29922' },
+              { label: 'Hard', value: userStats.hardSolved, total: hardTotal, color: '#f85149' },
+              { label: 'Total', value: userStats.totalSolved, total: problems.length, color: '#58a6ff' },
             ].map(({ label, value, total, color }) => (
               <div key={label} className="glass-card p-4 text-center">
                 <div className="text-2xl font-bold" style={{ color }}>{value}</div>
