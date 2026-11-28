@@ -571,15 +571,6 @@ export default function AICodeMentor() {
               </p>
             </div>
           </div>
-
-          <button
-            onClick={() => setIsBrowseModalOpen(true)}
-            className="btn-primary px-4 py-2 text-xs flex items-center gap-2 shadow-lg hover:scale-105 transition-transform"
-            style={{ background: 'linear-gradient(135deg, #58a6ff, #bc8cff)', color: '#0d1117' }}
-          >
-            <BookOpen size={15} />
-            Browse Questions
-          </button>
         </div>
       </div>
 
@@ -636,7 +627,7 @@ export default function AICodeMentor() {
               >
                 <Brain size={32} className="mx-auto opacity-30 text-purple-400" />
                 <p className="text-xs text-muted">
-                  Choose from our 50 curated DSA problems or create a custom question with AI auto-testing.
+                  Choose from our 300+ curated DSA problems or create a custom question with AI auto-testing.
                 </p>
                 <button
                   onClick={() => setIsBrowseModalOpen(true)}

@@ -1,8 +1,6 @@
 import React, { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import {
-  Flame, Trophy, Target, TrendingUp, CheckCircle, Clock,
-  AlertCircle, BookOpen, Star, ChevronRight,
+  Flame, Trophy, Target, TrendingUp, AlertCircle, BookOpen, Star,
 } from 'lucide-react';
 import { useAppContext } from '../store/AppContext';
 import { useAuth } from '../store/AuthContext';
@@ -76,89 +74,6 @@ function DifficultyProgress({ label, solved, total, color }: { label: string; so
       <span className="text-xs font-semibold" style={{ color }}>
         {solved}/{total}
       </span>
-    </div>
-  );
-}
-
-// ============================================================
-// RECOMMENDED PROBLEMS
-// ============================================================
-function RecommendedProblems({ progress }: { progress: Record<number, any> }) {
-  const recommended = useMemo(() => {
-    const unsolvedEasy = problems.filter(
-      (p) => p.difficulty === 'Easy' && (!progress[p.id] || progress[p.id].status !== 'solved')
-    ).slice(0, 2);
-    const unsolvedMedium = problems.filter(
-      (p) => p.difficulty === 'Medium' && (!progress[p.id] || progress[p.id].status !== 'solved')
-    ).slice(0, 1);
-    return [...unsolvedEasy, ...unsolvedMedium];
-  }, [progress]);
-
-  return (
-    <div className="flex flex-col gap-2">
-      {recommended.map((p) => (
-        <Link
-          key={p.id}
-          to={`/problems/${p.id}`}
-          className="flex items-center justify-between p-3 rounded-lg transition-all hover:border-blue-500"
-          style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)' }}
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted w-6 text-right">{p.id}.</span>
-            <span className="text-sm font-medium text-primary">{p.title}</span>
-            <span className={`badge-${p.difficulty.toLowerCase()}`}>{p.difficulty}</span>
-          </div>
-          <ChevronRight size={14} className="text-muted" />
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-// ============================================================
-// RECENT SUBMISSIONS
-// ============================================================
-function RecentSubmissions({ submissions }: { submissions: any[] }) {
-  const recent = submissions.slice(0, 5);
-  if (recent.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8 text-muted text-sm">
-        <BookOpen size={32} className="mb-2 opacity-30" />
-        <p>No submissions yet. Start solving!</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-2">
-      {recent.map((sub) => (
-        <div
-          key={sub.id}
-          className="flex items-center justify-between p-3 rounded-lg"
-          style={{ background: 'var(--color-bg-card)', border: '1px solid var(--color-border)' }}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            {sub.result.status === 'Accepted' ? (
-              <CheckCircle size={14} style={{ color: '#3fb950' }} className="shrink-0" />
-            ) : (
-              <AlertCircle size={14} style={{ color: '#f85149' }} className="shrink-0" />
-            )}
-            <Link to={`/problems/${sub.problemId}`} className="text-sm font-medium text-primary hover:text-accent truncate">
-              {sub.problemTitle}
-            </Link>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <span
-              className={sub.result.status === 'Accepted' ? 'badge-accepted' : 'badge-wrong'}
-            >
-              {sub.result.status === 'Accepted' ? '✓' : '✗'} {sub.result.status}
-            </span>
-            <span className="text-xs text-muted">
-              {new Date(sub.timestamp).toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-      ))}
     </div>
   );
 }
@@ -305,8 +220,8 @@ export default function Dashboard() {
 
       {/* Main grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Submission Activity Heatmap */}
-        <div className="glass-card p-5">
+        {/* Submission Activity Heatmap - Full width across 2 columns */}
+        <div className="glass-card p-5 lg:col-span-2">
           <h2 className="text-base font-semibold text-primary mb-4 flex items-center gap-2">
             <TrendingUp size={16} style={{ color: '#58a6ff' }} />
             Submission Activity
@@ -320,76 +235,67 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Difficulty Breakdown */}
-        <div className="glass-card p-5">
+        {/* Left Column: Difficulty Breakdown + Weak Concepts */}
+        <div className="space-y-6">
+          {/* Difficulty Breakdown */}
+          <div className="glass-card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-semibold text-primary flex items-center gap-2">
+                <BookOpen size={16} style={{ color: '#58a6ff' }} />
+                Difficulty Breakdown
+              </h2>
+              <span className="text-xs text-muted">{userStats.totalSolved} solved</span>
+            </div>
+            <div className="space-y-3">
+              <DifficultyProgress label="Easy" solved={solvedByDifficulty.easy} total={problems.filter(p => p.difficulty === 'Easy').length} color="#3fb950" />
+              <DifficultyProgress label="Medium" solved={solvedByDifficulty.medium} total={problems.filter(p => p.difficulty === 'Medium').length} color="#d29922" />
+              <DifficultyProgress label="Hard" solved={solvedByDifficulty.hard} total={problems.filter(p => p.difficulty === 'Hard').length} color="#f85149" />
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 mt-5 pt-4" style={{ borderTop: '1px solid var(--color-border)' }}>
+              <div className="text-center">
+                <div className="text-xl font-bold" style={{ color: '#3fb950' }}>{solvedByDifficulty.easy}</div>
+                <div className="text-xs text-muted">Easy</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold" style={{ color: '#d29922' }}>{solvedByDifficulty.medium}</div>
+                <div className="text-xs text-muted">Medium</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold" style={{ color: '#f85149' }}>{solvedByDifficulty.hard}</div>
+                <div className="text-xs text-muted">Hard</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Weak Concepts */}
+          <div className="glass-card p-5">
+            <h2 className="text-base font-semibold text-primary mb-4 flex items-center gap-2">
+              <AlertCircle size={16} style={{ color: '#f85149' }} />
+              Weak Concepts
+            </h2>
+            <WeakConcepts
+              weakConcepts={userStats.weakConcepts}
+              topicMastery={userStats.topicMastery}
+            />
+          </div>
+        </div>
+
+        {/* Right Column: Topic Progress */}
+        <div className="glass-card p-5 flex flex-col">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-primary flex items-center gap-2">
-              <BookOpen size={16} style={{ color: '#58a6ff' }} />
-              Difficulty Breakdown
+              <TrendingUp size={16} style={{ color: '#bc8cff' }} />
+              Topic Progress
             </h2>
-            <span className="text-xs text-muted">{userStats.totalSolved} solved</span>
+            <span className="text-xs text-muted">15 Topics</span>
           </div>
-          <div className="space-y-3">
-            <DifficultyProgress label="Easy" solved={solvedByDifficulty.easy} total={problems.filter(p => p.difficulty === 'Easy').length} color="#3fb950" />
-            <DifficultyProgress label="Medium" solved={solvedByDifficulty.medium} total={problems.filter(p => p.difficulty === 'Medium').length} color="#d29922" />
-            <DifficultyProgress label="Hard" solved={solvedByDifficulty.hard} total={problems.filter(p => p.difficulty === 'Hard').length} color="#f85149" />
-          </div>
-
-          <div className="grid grid-cols-3 gap-4 mt-5 pt-4" style={{ borderTop: '1px solid var(--color-border)' }}>
-            <div className="text-center">
-              <div className="text-xl font-bold" style={{ color: '#3fb950' }}>{solvedByDifficulty.easy}</div>
-              <div className="text-xs text-muted">Easy</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold" style={{ color: '#d29922' }}>{solvedByDifficulty.medium}</div>
-              <div className="text-xs text-muted">Medium</div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-bold" style={{ color: '#f85149' }}>{solvedByDifficulty.hard}</div>
-              <div className="text-xs text-muted">Hard</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Submissions */}
-        <div className="glass-card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-primary flex items-center gap-2">
-              <Clock size={16} style={{ color: '#58a6ff' }} />
-              Recent Submissions
-            </h2>
-            <Link to="/profile" className="text-xs text-accent hover:underline">
-              View all →
-            </Link>
-          </div>
-          <RecentSubmissions submissions={submissions} />
-        </div>
-
-        {/* Weak Concepts */}
-        <div className="glass-card p-5">
-          <h2 className="text-base font-semibold text-primary mb-4 flex items-center gap-2">
-            <AlertCircle size={16} style={{ color: '#f85149' }} />
-            Weak Concepts
-          </h2>
-          <WeakConcepts
-            weakConcepts={userStats.weakConcepts}
-            topicMastery={userStats.topicMastery}
-          />
-        </div>
-
-        {/* Topic Progress */}
-        <div className="glass-card p-5">
-          <h2 className="text-base font-semibold text-primary mb-4 flex items-center gap-2">
-            <TrendingUp size={16} style={{ color: '#bc8cff' }} />
-            Topic Progress
-          </h2>
-          <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+          <div className="space-y-3 flex-1 overflow-y-auto pr-1 max-h-[380px]">
             {Object.entries(userStats.topicMastery)
-              .filter(([, v]) => v > 0)
               .sort(([, a], [, b]) => b - a)
               .map(([topic, score]) => (
                 <div key={topic} className="flex items-center gap-2">
-                  <span className="text-xs text-secondary w-28 truncate shrink-0">{topic}</span>
+                  <span className="text-xs text-secondary w-32 truncate shrink-0">{topic}</span>
                   <div className="flex-1 progress-bar">
                     <div
                       className="progress-fill"
